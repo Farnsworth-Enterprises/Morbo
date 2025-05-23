@@ -1,1 +1,1 @@
-print ("THATS NOT HOW WINDMILLS WORK! GOODNIGHT!!!")
+print ("Kittens give Morbo gas.")
