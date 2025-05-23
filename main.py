@@ -1,2 +1,1 @@
-arr = ['Kittens', 'give', 'Morbo', 'gas']
-
+print("Kittens give Morbo gas")
