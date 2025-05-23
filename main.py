@@ -1,1 +1,4 @@
-print ("Kittens give Morbo gas.")
+arr = ['Kittens', 'give', 'Morbo', 'gas']
+
+for w in arr:
+  print(w)
