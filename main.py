@@ -6,6 +6,34 @@ from langchain.prompts import PromptTemplate
 import json
 
 
+class GitHubConnection:
+    _instance = None
+
+    def __new__(cls):
+        if cls._instance is None:
+            cls._instance = super(GitHubConnection, cls).__new__(cls)
+            cls._instance._github = None
+        return cls._instance
+
+    def __init__(self):
+        if self._github is None:
+            load_dotenv()
+            auth = Auth.Token(os.getenv("GITHUB_TOKEN"))
+            self._github = Github(auth=auth)
+
+    def get_github(self):
+        return self._github
+
+    def close(self):
+        if self._github:
+            self._github.close()
+            self._github = None
+
+
+# Create a global instance
+github = GitHubConnection()
+
+
 def get_pr_info(repo_name, pr_number):
     """
     Retrieves structured information about a pull request that can be used to generate a PR summary.
@@ -24,9 +52,7 @@ def get_pr_info(repo_name, pr_number):
             - files_changed: List of files with their changes
             - total_changes: Summary of total changes
     """
-    load_dotenv()
-    auth = Auth.Token(os.getenv("GITHUB_TOKEN"))
-    g = Github(auth=auth)
+    g = github.get_github()
 
     try:
         repo = g.get_repo(repo_name)
@@ -62,9 +88,9 @@ def get_pr_info(repo_name, pr_number):
         }
 
         return pr_info
-
-    finally:
-        g.close()
+    except Exception as e:
+        print(f"Error: {str(e)}", file=sys.stderr)
+        raise e
 
 
 def generate_pr_summary(repo_name, pr_number):
@@ -140,6 +166,20 @@ Guidelines:
         }
 
 
+def update_pr(repo_name, pr_number, summary):
+    g = github.get_github()
+
+    try:
+        g.get_repo(repo_name).get_pull(pr_number).edit(
+            title=summary['title'], body=summary['description'])
+
+        print(f"PR {pr_number} updated successfully")
+        return True
+    except Exception as e:
+        print(f"Error: {str(e)}", file=sys.stderr)
+        raise e
+
+
 if __name__ == "__main__":
     import sys
     if len(sys.argv) != 3:
@@ -150,8 +190,10 @@ if __name__ == "__main__":
         repo_name = sys.argv[1]
         pr_number = int(sys.argv[2])
         summary = generate_pr_summary(repo_name, pr_number)
-        print(summary)
-
+        update_pr(repo_name, pr_number, summary)
     except Exception as e:
         print(f"Error: {str(e)}", file=sys.stderr)
         sys.exit(1)
+
+    finally:
+        github.close()
