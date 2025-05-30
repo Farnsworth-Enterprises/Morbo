@@ -48,3 +48,8 @@ logs/
 # Local development settings
 local_settings.py
 db.sqlite3 
+
+langllama.py
+ghWrapper.py
+get_pr.py
+pr-summary.yml
