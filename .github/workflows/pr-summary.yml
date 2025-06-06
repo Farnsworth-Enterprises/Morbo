@@ -21,7 +21,8 @@ jobs:
 
             - name: List vars
               run: |
-                  echo "GITHUB_BASE_REF: ${{ github.base_ref }}"
+                  echo "GITHUB_REF: ${{ github.ref }}"
+                  echo "GITHUB_REPO: ${{ github.repository }}"
                   echo "GITHUB_EVENT_PR_NUMBER: ${{ github.event.pull_request.number }}"
                   echo "GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}"
 
@@ -32,4 +33,4 @@ jobs:
             # - name: Generate PR Summary
             #   env:
             #       GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-            #   run: python main.py ${{github.base_ref}} ${{ github.event.pull_request.number }}
+            #   run: python main.py ${{github.repository}}/${{github.base_ref}} ${{ github.event.pull_request.number }}
