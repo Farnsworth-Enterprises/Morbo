@@ -52,4 +52,3 @@ db.sqlite3
 langllama.py
 ghWrapper.py
 get_pr.py
-pr-summary.yml
