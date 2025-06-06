@@ -141,6 +141,7 @@ Guidelines:
     )
 
     model = OllamaLLM(
+        base_url=os.getenv("OLLAMA_URL"),
         model="deepseek-r1:8b",
         temperature=0.0,
         format="json"
