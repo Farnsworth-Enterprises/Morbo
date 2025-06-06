@@ -21,16 +21,17 @@ jobs:
 
             - name: List vars
               run: |
-                  echo "GITHUB_REF: ${{ github.ref }}"
                   echo "GITHUB_REPO: ${{ github.repository }}"
                   echo "GITHUB_EVENT_PR_NUMBER: ${{ github.event.pull_request.number }}"
-                  echo "GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}"
 
-            # - name: Install dependencies
-            #   run: |
-            #       pip install -r requirements.txt
+            - name: Install dependencies
+              run: |
+                  pip install -r requirements.txt
 
-            # - name: Generate PR Summary
-            #   env:
-            #       GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-            #   run: python main.py ${{github.repository}}/${{github.base_ref}} ${{ github.event.pull_request.number }}
+            - name: Generate PR Summary
+              env:
+                  OLLAMA_URL: ${{ secrets.OLLAMA_URL }}
+                  GITHUB_REPO: ${{ github.repository }}
+                  GITHUB_EVENT_PR_NUMBER: ${{ github.event.pull_request.number }}
+                  GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+              run: python main.py $GITHUB_REPO $GITHUB_EVENT_PR_NUMBER
