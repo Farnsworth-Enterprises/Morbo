@@ -92,8 +92,8 @@ Environment variable configuration is still in progress and will soon replace CL
 
 ## Authors:
 
-Luis Gonzalez
-Jordan Biehl
+- [Luis Gonzalez](https://github.com/zluigon)
+- [Jordan Biehl](https://github.com/jbiehl88)
 
 
 
