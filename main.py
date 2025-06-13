@@ -4,6 +4,9 @@ import os
 from langchain_ollama import OllamaLLM
 from langchain.prompts import PromptTemplate
 import json
+import logging
+import requests
+from requests.exceptions import RequestException
 
 
 class GitHubConnection:
@@ -32,6 +35,10 @@ class GitHubConnection:
 
 # Create a global instance
 github = GitHubConnection()
+
+# Set up logging
+logging.basicConfig(level=logging.DEBUG)
+logger = logging.getLogger(__name__)
 
 
 def get_pr_info(repo_name, pr_number):
@@ -123,8 +130,6 @@ Return this exact JSON structure:
 
 PR Context:
 - Title: {title}
-- Author: {author}
-- Branch: {head_branch} → {base_branch}
 - Total Changes: {total_changes}
 
 Changes:
@@ -134,36 +139,61 @@ Changes:
 
 Guidelines:
 1. Title: Be specific about the type of change, avoid generic titles
-2. Description: Focus on why and how instead of what changed, use bullet points for multiple changes
+2. Description: Focus on what changed, you must use bullet points for changes with short descriptions, avoid using full sentences.
 3. IMPORTANT: Return ONLY the JSON object, no additional text, no explanations, no markdown formatting outside the JSON""",
-        input_variables=["title", "author", "head_branch",
-                         "base_branch", "total_changes", "diff"]
+        input_variables=["title", "total_changes", "diff"]
     )
 
+    ollama_url = os.getenv("OLLAMA_URL")
+
+    try:
+        headers = {
+            'Accept': 'application/json',
+            'User-Agent': 'Python/3.x'
+        }
+        session = requests.Session()
+        session.headers.update(headers)
+        test_response = session.get(
+            f"{ollama_url}/api/tags",
+            timeout=30, 
+            verify=True
+        )
+        test_response.raise_for_status()
+        logger.debug("Successfully connected to Ollama server")
+    except RequestException as e:
+        logger.error(f"Failed to connect to Ollama server: {str(e)}")
+        raise
+
     model = OllamaLLM(
+        base_url=ollama_url,
         model="deepseek-r1:8b",
         temperature=0.0,
-        format="json"
+        format="json",
+        timeout=120,
+        headers=headers
     )
 
     formatted_prompt = prompt.format(
         title=pr_info['title'],
-        author=pr_info['author'],
-        head_branch=pr_info['head_branch'],
-        base_branch=pr_info['base_branch'],
         total_changes=f"{pr_info['total_changes']['additions']} additions, {pr_info['total_changes']['deletions']} deletions across {pr_info['total_changes']['files_changed']} files",
         diff=combined_diff
     )
 
-    response = model.invoke(input=formatted_prompt)
+    logger.debug("Sending request to Ollama")
     try:
-        return json.loads(response)
-    except json.JSONDecodeError as e:
-        print(f"Error parsing JSON response: {e}", file=sys.stderr)
-        return {
-            "title": pr_info['title'],
-            "description": response
-        }
+        response = model.invoke(input=formatted_prompt)
+        logger.debug("Received response from Ollama")
+        try:
+            return json.loads(response)
+        except json.JSONDecodeError as e:
+            logger.error(f"Error parsing JSON response: {e}")
+            return {
+                "title": pr_info['title'],
+                "description": response
+            }
+    except Exception as e:
+        logger.error(f"Error during Ollama request: {str(e)}")
+        raise
 
 
 def update_pr(repo_name, pr_number, summary):
