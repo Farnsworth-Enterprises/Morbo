@@ -155,7 +155,7 @@ Guidelines:
         session.headers.update(headers)
         test_response = session.get(
             f"{ollama_url}/api/tags",
-            timeout=30, 
+            timeout=30,
             verify=True
         )
         test_response.raise_for_status()

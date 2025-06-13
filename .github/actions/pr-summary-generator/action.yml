@@ -1,0 +1,40 @@
+name: "PR Summary Generator"
+description: "Generates a summary for pull requests using LLM"
+
+inputs:
+    github-token:
+        description: "GitHub token for authentication"
+        required: true
+    ollama-url:
+        description: "URL for Ollama service"
+        required: true
+    model-name:
+        description: "Name of the Ollama model to use"
+        required: false
+        default: "deepseek-r1:8b"
+
+runs:
+    using: "composite"
+    steps:
+        - name: "Checkout Repository"
+          uses: actions/checkout@v4
+
+        - name: "Set up Python"
+          uses: actions/setup-python@v4
+          with:
+              python-version: "3.11"
+
+        - name: "Install dependencies"
+          run: |
+              python -m pip install --upgrade pip
+              pip install langchain==0.3.25 PyGithub==2.6.1 python-dotenv==1.1.0 langchain-community==0.3.24 langchain-ollama==0.3.3 langchain-core==0.3.61 langchain-text-splitters==0.3.8 ollama==0.4.8
+
+        - name: "Generate PR Summary"
+          env:
+              GITHUB_TOKEN: ${{ inputs.github-token }}
+              OLLAMA_URL: ${{ inputs.ollama-url }}
+              REPO_NAME: ${{ github.repository }}
+              PR_NUMBER: ${{ github.event.pull_request.number }}
+              MODEL_NAME: ${{ inputs.model-name }}
+          run: |
+              python main.py "$REPO_NAME" "$PR_NUMBER"
