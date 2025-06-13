@@ -32,5 +32,5 @@ jobs:
               with:
                   context: .
                   push: true
-                  tags: ${{env.REGISTRY}}/${{lower(env.IMAGE_NAME)}}:latest
+                  tags: ${{env.REGISTRY}}/$(echo ${{ github.repository }} | tr '[:upper:]' '[:lower:]'):latest
                   file: ./morbo/Dockerfile
