@@ -12,26 +12,12 @@ jobs:
             pull-requests: write
 
         steps:
-            - uses: actions/checkout@v3
-
-            - name: Set up Python
-              uses: actions/setup-python@v4
-              with:
-                  python-version: "3.x"
-
-            - name: List vars
-              run: |
-                  echo "GITHUB_REPO: ${{ github.repository }}"
-                  echo "GITHUB_EVENT_PR_NUMBER: ${{ github.event.pull_request.number }}"
-
-            - name: Install dependencies
-              run: |
-                  pip install -r requirements.txt
+            - name: Checkout repository
+              uses: actions/checkout@v4
 
             - name: Generate PR Summary
-              env:
-                  OLLAMA_URL: ${{ secrets.OLLAMA_URL }}
-                  GITHUB_REPO: ${{ github.repository }}
-                  GITHUB_EVENT_PR_NUMBER: ${{ github.event.pull_request.number }}
-                  GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-              run: python main.py $GITHUB_REPO $GITHUB_EVENT_PR_NUMBER
+              uses: ./.github/actions/pr-summary-generator
+              with:
+                  github-token: ${{ secrets.GITHUB_TOKEN }}
+                  ollama-url: ${{ secrets.OLLAMA_URL }}
+                  model-name: "deepseek-r1:8b"
