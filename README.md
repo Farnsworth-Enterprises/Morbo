@@ -90,6 +90,11 @@ docker run \
 
 Environment variable configuration is still in progress and will soon replace CLI input.
 
+## Authors:
+
+Luis Gonzalez
+Jordan Biehl
+
 
 
 
