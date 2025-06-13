@@ -1,5 +1,3 @@
-# Morbo
-
 <p align="center">
   <img src="https://michaelgmunz.com/wp-content/uploads/2016/09/morbo-doom.png">
 </p>
@@ -62,4 +60,42 @@ Whenever a pull request is opened or updated, **Morbo**:
         ┌─────────────────────┐
         │  Post comment to PR │
         └─────────────────────┘
+```
+---
+
+## Quick Start
+
+### 1. Clone the Repository
+
+```
+git clone https://github.com/Farnsworth-Enterprises/Morbo.git
+cd Morbo
+```
+
+### 2. Build the Docker Container
+
+```
+docker build -t morbo .
+```
+
+### 3. Run Morbo (from CI or locally)
+
+```
+docker run \
+  -e GITHUB_TOKEN=your_token \
+  -e PR_URL=https://api.github.com/repos/user/repo/pulls/42 \
+  -e LLM_API_URL=https://your-deepseek-endpoint.com/generate \
+  morbo
+```
+
+Environment variable configuration is still in progress and will soon replace CLI input.
+
+
+
+
+
+
+
+
+
 
