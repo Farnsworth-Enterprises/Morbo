@@ -4,7 +4,9 @@ import os
 from langchain_ollama import OllamaLLM
 from langchain.prompts import PromptTemplate
 import json
-import sys
+import logging
+import requests
+from requests.exceptions import RequestException
 
 
 class GitHubConnection:
@@ -33,6 +35,10 @@ class GitHubConnection:
 
 # Create a global instance
 github = GitHubConnection()
+
+# Set up logging
+logging.basicConfig(level=logging.DEBUG)
+logger = logging.getLogger(__name__)
 
 
 def get_pr_info(repo_name, pr_number):
@@ -139,10 +145,26 @@ Guidelines:
     )
 
     ollama_url = os.getenv("OLLAMA_URL")
-    headers = {
-        'Accept': 'application/json',
-        'User-Agent': 'Python/3.x'
-    }
+    logger.debug(f"Connecting to Ollama at URL: {ollama_url}")
+
+    try:
+        # Test connection to Ollama server with longer timeout and specific headers
+        headers = {
+            'Accept': 'application/json',
+            'User-Agent': 'Python/3.x'
+        }
+        session = requests.Session()
+        session.headers.update(headers)
+        test_response = session.get(
+            f"{ollama_url}/api/tags",
+            timeout=30,  # Increased timeout
+            verify=True
+        )
+        test_response.raise_for_status()
+        logger.debug("Successfully connected to Ollama server")
+    except RequestException as e:
+        logger.error(f"Failed to connect to Ollama server: {str(e)}")
+        raise
 
     model = OllamaLLM(
         base_url=ollama_url,
@@ -150,7 +172,7 @@ Guidelines:
         temperature=0.0,
         format="json",
         timeout=120,
-        headers=headers
+        headers=headers  # Pass the same headers to the OllamaLLM
     )
 
     formatted_prompt = prompt.format(
@@ -159,18 +181,20 @@ Guidelines:
         diff=combined_diff
     )
 
+    logger.debug("Sending request to Ollama")
     try:
         response = model.invoke(input=formatted_prompt)
+        logger.debug("Received response from Ollama")
         try:
             return json.loads(response)
         except json.JSONDecodeError as e:
-            print(f"Error parsing JSON response: {e}", file=sys.stderr)
+            logger.error(f"Error parsing JSON response: {e}")
             return {
                 "title": pr_info['title'],
                 "description": response
             }
     except Exception as e:
-        print(f"Error: {str(e)}", file=sys.stderr)
+        logger.error(f"Error during Ollama request: {str(e)}")
         raise
 
 
@@ -189,6 +213,7 @@ def update_pr(repo_name, pr_number, summary):
 
 
 if __name__ == "__main__":
+    import sys
     if len(sys.argv) != 3:
         print("Usage: python main.py <repo_name> <pr_number>")
         sys.exit(1)
