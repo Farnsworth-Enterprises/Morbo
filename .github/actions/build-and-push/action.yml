@@ -1,6 +1,10 @@
 name: "Build and Push Docker Image"
 description: "Builds and pushes a Docker image to GitHub Container Registry"
 
+branding:
+  icon: check-circle
+  color: green
+
 inputs:
     dockerfile:
         description: "Path to the Dockerfile"
