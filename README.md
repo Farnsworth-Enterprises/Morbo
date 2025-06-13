@@ -32,34 +32,34 @@ Whenever a pull request is opened or updated, **Morbo**:
 ## How It Works (Architecture)
 
 ```plaintext
-           GitHub PR
-               |
-               v
-        CI/CD Pipeline triggers
-               |
-               v
-          Morbo CLI runs
-               |
-        ┌─────────────────────┐
-        │  Fetch PR diff via  │
-        │    GitHub API       │
-        └─────────────────────┘
-               |
-               v
-        ┌─────────────────────┐
-        │  Send diff to LLM   │
-        │ (DeepSeek on GCP)   │
-        └─────────────────────┘
-               |
-               v
-        ┌─────────────────────┐
-        │ Receive summary text│
-        └─────────────────────┘
-               |
-               v
-        ┌─────────────────────┐
-        │  Post comment to PR │
-        └─────────────────────┘
+                                   GitHub PR
+                                       |
+                                       v
+                                CI/CD Pipeline triggers
+                                       |
+                                       v
+                                  Morbo CLI runs
+                                       |
+                                ┌─────────────────────┐
+                                │  Fetch PR diff via  │
+                                │    GitHub API       │
+                                └─────────────────────┘
+                                       |
+                                       v
+                                ┌─────────────────────┐
+                                │  Send diff to LLM   │
+                                │ (DeepSeek on GCP)   │
+                                └─────────────────────┘
+                                       |
+                                       v
+                                ┌─────────────────────┐
+                                │ Receive summary text│
+                                └─────────────────────┘
+                                       |
+                                       v
+                                ┌─────────────────────┐
+                                │  Post comment to PR │
+                                └─────────────────────┘
 ```
 ---
 
