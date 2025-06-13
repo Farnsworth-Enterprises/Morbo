@@ -1,32 +1,36 @@
-name: Deploy Images to GHCR
-
-env:
-  DOTNET_VERSION: '6.0.x'
+name: Build and Push Docker Image
 
 on:
-  push:
-    branches:
-      - main
-  workflow_dispatch:
+    push:
+        branches:
+            - main
+
+env:
+    REGISTRY: ghcr.io
+    IMAGE_NAME: ${{github.repository}}
 
 jobs:
-      push-morbo-image:
+    build-and-push-morbo-image:
         runs-on: ubuntu-latest
-        defaults:
-          run:
-            working-directory: './morbo'
+        permissions:
+            contents: read
+            packages: write
+
         steps:
-          - name: 'Checkout GitHub Action'
-            uses: actions/checkout@main
+            - name: "Checkout Repository"
+              uses: actions/checkout@v4
 
-          - name: 'Login to GitHub Container Registry'
-            uses: docker/login-action@v1
-            with:
-              registry: ghcr.io
-              username: ${{github.actor}}
-              password: ${{secrets.GITHUB_TOKEN}}
-
-          - name: 'Build Morbo Image'
-            run: |
-              docker build . --tag ghcr.io/zluigon/morbo:latest
-              docker push ghcr.io/zluigon/morbo:latest
+            - name: "Login to GitHub Container Registry"
+              uses: docker/login-action@v1
+              with:
+                  registry: ${{env.REGISTRY}}
+                  username: ${{github.actor}}
+                  password: ${{secrets.GITHUB_TOKEN}}
+            
+            - name: "Build and push Docker image"
+              uses: docker/build-push-action@v4
+              with:
+                context: .
+                push: true
+                tags: ${{env.REGISTRY}}/${{env.IMAGE_NAME}}:latest
+                file: ./morbo/Dockerfile
