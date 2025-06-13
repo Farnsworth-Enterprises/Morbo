@@ -139,16 +139,14 @@ Changes:
 
 Guidelines:
 1. Title: Be specific about the type of change, avoid generic titles
-2. Description: Focus on why and how instead of what changed, use bullet points for changes with short descriptions, avoid using full sentences.
+2. Description: Focus on what changed, you must use bullet points for changes with short descriptions, avoid using full sentences.
 3. IMPORTANT: Return ONLY the JSON object, no additional text, no explanations, no markdown formatting outside the JSON""",
         input_variables=["title", "total_changes", "diff"]
     )
 
     ollama_url = os.getenv("OLLAMA_URL")
-    logger.debug(f"Connecting to Ollama at URL: {ollama_url}")
 
     try:
-        # Test connection to Ollama server with longer timeout and specific headers
         headers = {
             'Accept': 'application/json',
             'User-Agent': 'Python/3.x'
@@ -157,7 +155,7 @@ Guidelines:
         session.headers.update(headers)
         test_response = session.get(
             f"{ollama_url}/api/tags",
-            timeout=30,  # Increased timeout
+            timeout=30, 
             verify=True
         )
         test_response.raise_for_status()
@@ -172,7 +170,7 @@ Guidelines:
         temperature=0.0,
         format="json",
         timeout=120,
-        headers=headers  # Pass the same headers to the OllamaLLM
+        headers=headers
     )
 
     formatted_prompt = prompt.format(
