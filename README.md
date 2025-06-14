@@ -21,11 +21,11 @@ Whenever a pull request is opened or updated, **Morbo**:
 
 ## Tech Stack
 
-- **Python** – Core application logic
-- **Docker** – Containerized for deployment across CI environments
-- **DeepSeek LLM** – Custom AI model hosted on GCP for summarizing code diffs
-- **GitHub API** – For fetching diffs and posting PR comments
-- **CI Integration** – Built to run during your automated pipelines
+-   **Python** – Core application logic
+-   **Docker** – Containerized for deployment across CI environments
+-   **DeepSeek LLM** – Custom AI model hosted on GCP for summarizing code diffs
+-   **GitHub API** – For fetching diffs and posting PR comments
+-   **CI Integration** – Built to run during your automated pipelines
 
 ---
 
@@ -61,26 +61,27 @@ Whenever a pull request is opened or updated, **Morbo**:
                                 │  Post comment to PR │
                                 └─────────────────────┘
 ```
+
 ---
 
 ## Quick Start
 
 ### 1. Clone the Repository
 
-```
+```bash
 git clone https://github.com/Farnsworth-Enterprises/Morbo.git
 cd Morbo
 ```
 
 ### 2. Build the Docker Container
 
-```
+```bash
 docker build -t morbo .
 ```
 
 ### 3. Run Morbo (from CI or locally)
 
-```
+```bash
 docker run \
   -e GITHUB_TOKEN=your_token \
   -e PR_URL=https://api.github.com/repos/user/repo/pulls/42 \
@@ -90,17 +91,9 @@ docker run \
 
 Environment variable configuration is still in progress and will soon replace CLI input.
 
+
 ## Authors:
 
 - [Luis Gonzalez](https://github.com/zluigon)
 - [Jordan Biehl](https://github.com/jbiehl88)
-
-
-
-
-
-
-
-
-
 

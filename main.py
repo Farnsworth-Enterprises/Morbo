@@ -220,6 +220,8 @@ if __name__ == "__main__":
         repo_name = sys.argv[1]
         pr_number = int(sys.argv[2])
         summary = generate_pr_summary(repo_name, pr_number)
+
+        print(f"Generated Pull Request Summary: {summary}")
         update_pr(repo_name, pr_number, summary)
     except Exception as e:
         print(f"Error: {str(e)}", file=sys.stderr)
