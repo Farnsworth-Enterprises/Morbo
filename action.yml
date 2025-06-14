@@ -1,0 +1,22 @@
+name: "PR Description Generator"
+description: "Automatically generates descriptive PR summaries using AI"
+author: "Morbo"
+inputs:
+    github-token:
+        description: "GitHub token for authentication"
+        required: true
+    ollama-url:
+        description: "URL of the Ollama server"
+        required: true
+    model-name:
+        description: "Name of the Ollama model to use"
+        required: false
+        default: "deepseek-r1:8b"
+
+runs:
+    using: "docker"
+    image: "Dockerfile"
+    args:
+        - ${{ inputs.github-token }}
+        - ${{ inputs.ollama-url }}
+        - ${{ inputs.model-name }}

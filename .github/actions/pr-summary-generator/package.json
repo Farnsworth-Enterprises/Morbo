@@ -1,9 +1,0 @@
-{
-	"name": "pr-summary-generator",
-	"version": "1.0.0",
-	"description": "Generates a summary for pull requests using LLM",
-	"main": "index.js",
-	"dependencies": {
-		"@actions/core": "^1.10.0"
-	}
-}
