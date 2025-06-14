@@ -135,3 +135,8 @@ The action will generate a summary in this format:
 -   Added password hashing
 -   Updated API documentation
 ```
+
+## Authors:
+
+- [Luis Gonzalez](https://github.com/zluigon)
+- [Jordan Biehl](https://github.com/jbiehl88)
