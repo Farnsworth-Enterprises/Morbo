@@ -32,6 +32,10 @@ Whenever a pull request is opened or updated, **Morbo**:
 -   DeepSeek-R1:8B model for text generation
 -   **GitHub API** – For fetching diffs and updating PRs
 
+## Research & Inspiration
+
+This project is inspired by the research paper ["Automatic Pull Request Description Generation Using LLMs: A T5 Model Approach"](https://arxiv.org/abs/2408.00921) by Md Nazmus Sakib, Md Athikul Islam, and Md Mashrur Arifin. While their work utilized a fine-tuned T5 model, we've adapted their approach using modern LLM technology through Ollama and DeepSeek-R1, making it more accessible and easier to deploy.
+
 ## How It Works (Architecture)
 
 ```plaintext
