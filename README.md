@@ -32,34 +32,34 @@ Whenever a pull request is opened or updated, **Morbo**:
 ## How It Works (Architecture)
 
 ```plaintext
-           GitHub PR
-               |
-               v
-        CI/CD Pipeline triggers
-               |
-               v
-          Morbo CLI runs
-               |
-        ┌─────────────────────┐
-        │  Fetch PR diff via  │
-        │    GitHub API       │
-        └─────────────────────┘
-               |
-               v
-        ┌─────────────────────┐
-        │  Send diff to LLM   │
-        │ (DeepSeek on GCP)   │
-        └─────────────────────┘
-               |
-               v
-        ┌─────────────────────┐
-        │ Receive summary text│
-        └─────────────────────┘
-               |
-               v
-        ┌─────────────────────┐
-        │  Post comment to PR │
-        └─────────────────────┘
+                                   GitHub PR
+                                       |
+                                       v
+                                CI/CD Pipeline triggers
+                                       |
+                                       v
+                                  Morbo CLI runs
+                                       |
+                                ┌─────────────────────┐
+                                │  Fetch PR diff via  │
+                                │    GitHub API       │
+                                └─────────────────────┘
+                                       |
+                                       v
+                                ┌─────────────────────┐
+                                │  Send diff to LLM   │
+                                │ (DeepSeek on GCP)   │
+                                └─────────────────────┘
+                                       |
+                                       v
+                                ┌─────────────────────┐
+                                │ Receive summary text│
+                                └─────────────────────┘
+                                       |
+                                       v
+                                ┌─────────────────────┐
+                                │  Post comment to PR │
+                                └─────────────────────┘
 ```
 
 ---
@@ -68,20 +68,20 @@ Whenever a pull request is opened or updated, **Morbo**:
 
 ### 1. Clone the Repository
 
-```
+```bash
 git clone https://github.com/Farnsworth-Enterprises/Morbo.git
 cd Morbo
 ```
 
 ### 2. Build the Docker Container
 
-```
+```bash
 docker build -t morbo .
 ```
 
 ### 3. Run Morbo (from CI or locally)
 
-```
+```bash
 docker run \
   -e GITHUB_TOKEN=your_token \
   -e PR_URL=https://api.github.com/repos/user/repo/pulls/42 \
@@ -90,3 +90,10 @@ docker run \
 ```
 
 Environment variable configuration is still in progress and will soon replace CLI input.
+
+
+## Authors:
+
+- [Luis Gonzalez](https://github.com/zluigon)
+- [Jordan Biehl](https://github.com/jbiehl88)
+
