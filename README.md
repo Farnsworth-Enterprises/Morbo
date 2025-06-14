@@ -21,11 +21,11 @@ Whenever a pull request is opened or updated, **Morbo**:
 
 ## Tech Stack
 
-- **Python** – Core application logic
-- **Docker** – Containerized for deployment across CI environments
-- **DeepSeek LLM** – Custom AI model hosted on GCP for summarizing code diffs
-- **GitHub API** – For fetching diffs and posting PR comments
-- **CI Integration** – Built to run during your automated pipelines
+-   **Python** – Core application logic
+-   **Docker** – Containerized for deployment across CI environments
+-   **DeepSeek LLM** – Custom AI model hosted on GCP for summarizing code diffs
+-   **GitHub API** – For fetching diffs and posting PR comments
+-   **CI Integration** – Built to run during your automated pipelines
 
 ---
 
@@ -61,6 +61,7 @@ Whenever a pull request is opened or updated, **Morbo**:
         │  Post comment to PR │
         └─────────────────────┘
 ```
+
 ---
 
 ## Quick Start
@@ -89,13 +90,3 @@ docker run \
 ```
 
 Environment variable configuration is still in progress and will soon replace CLI input.
-
-
-
-
-
-
-
-
-
-

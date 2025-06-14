@@ -1,9 +1,0 @@
-{
-	"name": "build-and-push",
-	"version": "1.0.0",
-	"description": "Builds and pushes a Docker image to GitHub Container Registry",
-	"main": "index.js",
-	"dependencies": {
-		"@actions/core": "^1.10.0"
-	}
-}
