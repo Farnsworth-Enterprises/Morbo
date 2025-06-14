@@ -16,7 +16,7 @@ jobs:
               uses: actions/checkout@v4
 
             - name: Generate PR Summary
-              uses: ./
+              uses: ./.github/actions/pr-summary-generator
               with:
                   github-token: ${{ secrets.GITHUB_TOKEN }}
                   ollama-url: ${{ secrets.OLLAMA_URL }}
