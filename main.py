@@ -49,10 +49,6 @@ def get_pr_info(github_token):
         pr_info = {
             "title": pr.title,
             "description": pr.body,
-            "author": pr.user.login,
-            "created_at": pr.created_at.isoformat(),
-            "base_branch": pr.base.ref,
-            "head_branch": pr.head.ref,
             "files_changed": files_changed,
             "total_changes": total_changes
         }
