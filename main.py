@@ -1,5 +1,4 @@
 from github import Github, Auth
-from dotenv import load_dotenv
 import os
 from langchain_ollama import OllamaLLM
 from langchain.prompts import PromptTemplate
@@ -7,61 +6,25 @@ import json
 import logging
 import requests
 from requests.exceptions import RequestException
-
-
-class GitHubConnection:
-    _instance = None
-
-    def __new__(cls):
-        if cls._instance is None:
-            cls._instance = super(GitHubConnection, cls).__new__(cls)
-            cls._instance._github = None
-        return cls._instance
-
-    def __init__(self):
-        if self._github is None:
-            load_dotenv()
-            auth = Auth.Token(os.getenv("GITHUB_TOKEN"))
-            self._github = Github(auth=auth)
-
-    def get_github(self):
-        return self._github
-
-    def close(self):
-        if self._github:
-            self._github.close()
-            self._github = None
-
-
-# Create a global instance
-github = GitHubConnection()
+import sys
 
 # Set up logging
-logging.basicConfig(level=logging.DEBUG)
+logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 
-def get_pr_info(repo_name, pr_number):
+def get_pr_info(github_token):
     """
-    Retrieves structured information about a pull request that can be used to generate a PR summary.
-
-    Args:
-        pr_number (int): The number of the pull request to analyze
-
-    Returns:
-        dict: A dictionary containing structured PR information including:
-            - title: PR title
-            - description: PR description
-            - author: PR author
-            - created_at: PR creation date
-            - base_branch: Target branch
-            - head_branch: Source branch
-            - files_changed: List of files with their changes
-            - total_changes: Summary of total changes
+    Retrieves structured information about the current pull request.
     """
-    g = github.get_github()
+    auth = Auth.Token(github_token)
+    g = Github(auth=auth)
 
     try:
+        # Get repository and PR information from environment variables
+        repo_name = os.environ.get('REPO_NAME')
+        pr_number = int(os.environ.get('PR_NUMBER'))
+
         repo = g.get_repo(repo_name)
         pr = repo.get_pull(pr_number)
 
@@ -94,26 +57,16 @@ def get_pr_info(repo_name, pr_number):
             "total_changes": total_changes
         }
 
-        return pr_info
+        return pr_info, g
     except Exception as e:
-        print(f"Error: {str(e)}", file=sys.stderr)
+        logger.error(f"Error: {str(e)}")
         raise e
 
 
-def generate_pr_summary(repo_name, pr_number):
+def generate_pr_summary(pr_info, ollama_url, model_name, temperature):
     """
     Generates a PR summary using the LLM based on PR information.
-
-    Args:
-        pr_number (int): The number of the pull request to analyze
-
-    Returns:
-        dict: A dictionary containing:
-            - title: The PR title (max 72 characters)
-            - description: The PR description in markdown format
     """
-    pr_info = get_pr_info(repo_name, pr_number)
-
     combined_diff = "\n\n".join([
         f"File: {file['filename']}\nStatus: {file['status']}\n{file['patch']}"
         for file in pr_info['files_changed']
@@ -144,8 +97,6 @@ Guidelines:
         input_variables=["title", "total_changes", "diff"]
     )
 
-    ollama_url = os.getenv("OLLAMA_URL")
-
     try:
         headers = {
             'Accept': 'application/json',
@@ -159,15 +110,15 @@ Guidelines:
             verify=True
         )
         test_response.raise_for_status()
-        logger.debug("Successfully connected to Ollama server")
+        logger.info("Successfully connected to Ollama server")
     except RequestException as e:
         logger.error(f"Failed to connect to Ollama server: {str(e)}")
         raise
 
     model = OllamaLLM(
         base_url=ollama_url,
-        model="deepseek-r1:8b",
-        temperature=0.0,
+        model=model_name,
+        temperature=float(temperature),
         format="json",
         timeout=120,
         headers=headers
@@ -179,10 +130,10 @@ Guidelines:
         diff=combined_diff
     )
 
-    logger.debug("Sending request to Ollama")
+    logger.info("Generating PR summary...")
     try:
         response = model.invoke(input=formatted_prompt)
-        logger.debug("Received response from Ollama")
+        logger.info("Successfully generated PR summary")
         try:
             return json.loads(response)
         except json.JSONDecodeError as e:
@@ -196,36 +147,48 @@ Guidelines:
         raise
 
 
-def update_pr(repo_name, pr_number, summary):
-    g = github.get_github()
-
+def update_pr(github, summary):
+    """
+    Updates the PR with the generated summary.
+    """
     try:
-        g.get_repo(repo_name).get_pull(pr_number).edit(
-            title=summary['title'], body=summary['description'])
+        repo_name = os.environ.get('REPO_NAME')
+        pr_number = int(os.environ.get('PR_NUMBER'))
 
-        print(f"PR {pr_number} updated successfully")
+        github.get_repo(repo_name).get_pull(pr_number).edit(
+            title=summary['title'],
+            body=summary['description']
+        )
+
+        logger.info(f"PR {pr_number} updated successfully")
         return True
     except Exception as e:
-        print(f"Error: {str(e)}", file=sys.stderr)
+        logger.error(f"Error updating PR: {str(e)}")
         raise e
 
 
-if __name__ == "__main__":
-    import sys
-    if len(sys.argv) != 3:
-        print("Usage: python main.py <repo_name> <pr_number>")
-        sys.exit(1)
-
+def main():
     try:
-        repo_name = sys.argv[1]
-        pr_number = int(sys.argv[2])
-        summary = generate_pr_summary(repo_name, pr_number)
+        github_token = os.environ.get('GITHUB_TOKEN')
+        ollama_url = os.environ.get('OLLAMA_URL')
+        model_name = os.environ.get('MODEL_NAME', 'deepseek-r1:8b')
+        temperature = os.environ.get('TEMPERATURE', '0.0')
 
-        print(f"Generated Pull Request Summary: {summary}")
-        update_pr(repo_name, pr_number, summary)
+        if not all([github_token, ollama_url]):
+            logger.error("Missing required environment variables")
+            sys.exit(1)
+
+        pr_info, github = get_pr_info(github_token)
+        summary = generate_pr_summary(
+            pr_info, ollama_url, model_name, temperature)
+        update_pr(github, summary)
     except Exception as e:
-        print(f"Error: {str(e)}", file=sys.stderr)
+        logger.error(f"Error: {str(e)}")
         sys.exit(1)
-
     finally:
-        github.close()
+        if 'github' in locals():
+            github.close()
+
+
+if __name__ == "__main__":
+    main()
