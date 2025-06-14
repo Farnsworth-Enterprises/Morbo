@@ -37,7 +37,16 @@ class GitHubConnection:
 github = GitHubConnection()
 
 # Set up logging
-logging.basicConfig(level=logging.DEBUG)
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(message)s'  # Only show the message, not the logger name
+)
+
+# Disable debug logging for external libraries
+logging.getLogger('urllib3').setLevel(logging.WARNING)
+logging.getLogger('httpcore').setLevel(logging.WARNING)
+logging.getLogger('httpx').setLevel(logging.WARNING)
+
 logger = logging.getLogger(__name__)
 
 
@@ -52,7 +61,6 @@ def get_pr_info(repo_name, pr_number):
         dict: A dictionary containing structured PR information including:
             - title: PR title
             - description: PR description
-            - author: PR author
             - created_at: PR creation date
             - base_branch: Target branch
             - head_branch: Source branch
@@ -86,10 +94,6 @@ def get_pr_info(repo_name, pr_number):
         pr_info = {
             "title": pr.title,
             "description": pr.body,
-            "author": pr.user.login,
-            "created_at": pr.created_at.isoformat(),
-            "base_branch": pr.base.ref,
-            "head_branch": pr.head.ref,
             "files_changed": files_changed,
             "total_changes": total_changes
         }
@@ -120,13 +124,7 @@ def generate_pr_summary(repo_name, pr_number):
     ])
 
     prompt = PromptTemplate(
-        template="""You are a PR message generator. Your task is to analyze the PR changes and return ONLY a JSON object. Do not include any other text, explanations, or markdown formatting in your response.
-
-Return this exact JSON structure:
-{{
-    "title": "PR Title (max 72 characters)",
-    "description": "PR Description in markdown format"
-}}
+        template="""Analyze these PR changes and return a JSON object.
 
 PR Context:
 - Title: {title}
@@ -137,10 +135,26 @@ Changes:
 {diff}
 ```
 
+Return ONLY a JSON object with these exact fields:
+{{
+    "title": "PR Title (max 72 characters)",
+    "description": "PR Description in markdown format"
+}}
+
+Example response:
+{{
+    "title": "Add user authentication system",
+    "description": "- Implemented JWT-based authentication\\n- Added login and registration endpoints\\n- Created user model and database migrations"
+}}
+
 Guidelines:
-1. Title: Be specific about the type of change, avoid generic titles
-2. Description: Focus on what changed, you must use bullet points for changes with short descriptions, avoid using full sentences.
-3. IMPORTANT: Return ONLY the JSON object, no additional text, no explanations, no markdown formatting outside the JSON""",
+1. Title: Be specific about the type of change
+2. Description: Use bullet points for changes
+3. Return ONLY the JSON object
+4. Do not include any other text
+5. Do not nest the response under any other fields
+6. Do not use markdown headers or formatting
+7. The response must be valid JSON""",
         input_variables=["title", "total_changes", "diff"]
     )
 
@@ -159,9 +173,9 @@ Guidelines:
             verify=True
         )
         test_response.raise_for_status()
-        logger.debug("Successfully connected to Ollama server")
+        logger.info("Successfully connected to Ollama server")
     except RequestException as e:
-        logger.error(f"Failed to connect to Ollama server: {str(e)}")
+        logger.error("Failed to connect to Ollama server")
         raise
 
     model = OllamaLLM(
@@ -170,7 +184,20 @@ Guidelines:
         temperature=0.0,
         format="json",
         timeout=120,
-        headers=headers
+        headers=headers,
+        system="""You are a PR message generator that ONLY outputs valid JSON.
+Your response must be a single JSON object with exactly these fields:
+{
+    "title": "string (max 72 chars)",
+    "description": "string (markdown formatted)"
+}
+Do not include any other text, explanations, or fields.
+Do not use markdown headers or formatting in the response.
+The response must be parseable JSON.""",
+        stop=["```", "Human:", "Assistant:",
+              "Here's", "I'll", "Let me", "#", "##"],
+        context_window=4096,
+        num_predict=1024
     )
 
     formatted_prompt = prompt.format(
@@ -179,17 +206,48 @@ Guidelines:
         diff=combined_diff
     )
 
-    logger.debug("Sending request to Ollama")
+    logger.info("Generating PR summary...")
     try:
         response = model.invoke(input=formatted_prompt)
-        logger.debug("Received response from Ollama")
+        logger.info("Successfully generated PR summary")
         try:
-            return json.loads(response)
+            # Log the raw response for debugging
+            logger.debug(f"Raw response: {response}")
+
+            summary = json.loads(response)
+            if not isinstance(summary, dict):
+                raise ValueError(
+                    f"Response is not a dictionary. Raw response: {response}")
+
+            # Handle nested summary structure
+            if 'summary' in summary:
+                summary = summary['summary']
+
+            # Log the processed summary for debugging
+            logger.debug(f"Processed summary: {summary}")
+
+            if not summary:  # Check for empty dictionary
+                raise ValueError("Received empty response from Ollama")
+
+            # Validate required fields
+            required_fields = ['title', 'description']
+            missing_fields = [
+                field for field in required_fields if field not in summary]
+            if missing_fields:
+                raise ValueError(
+                    f"Missing required fields: {missing_fields}. Raw response: {response}")
+
+            # Validate field types
+            if not isinstance(summary['title'], str) or not isinstance(summary['description'], str):
+                raise ValueError(
+                    f"Invalid field types in response. Raw response: {response}")
+
+            return summary
         except json.JSONDecodeError as e:
             logger.error(f"Error parsing JSON response: {e}")
             return {
                 "title": pr_info['title'],
-                "description": response
+                "description": f"Error parsing AI response. Original PR title preserved.\n\nRaw AI response:\n{response}"
             }
     except Exception as e:
         logger.error(f"Error during Ollama request: {str(e)}")
@@ -220,8 +278,6 @@ if __name__ == "__main__":
         repo_name = sys.argv[1]
         pr_number = int(sys.argv[2])
         summary = generate_pr_summary(repo_name, pr_number)
-
-        print(f"Generated Pull Request Summary: {summary}")
         update_pr(repo_name, pr_number, summary)
     except Exception as e:
         print(f"Error: {str(e)}", file=sys.stderr)

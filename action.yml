@@ -43,4 +43,5 @@ runs:
               PR_NUMBER: ${{ github.event.pull_request.number }}
               MODEL_NAME: ${{ inputs.model-name }}
           run: |
-              python main.py "$REPO_NAME" "$PR_NUMBER"
+              python main.py
+              echo "PR summary generated for PR #${{ github.event.pull_request.number }} in ${github.repository}"
