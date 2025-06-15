@@ -82,6 +82,7 @@ def get_pr_info(repo_name, pr_number):
 
         files_changed = []
         total_size = 0
+
         MAX_DIFF_SIZE = 100000
         EXCLUDED_EXTENSIONS = {'.png', '.jpg', '.jpeg', '.gif', '.ico',
                                '.pdf', '.zip', '.tar', '.gz', '.mp4', '.mov', '.wav', '.mp3'}
@@ -92,6 +93,7 @@ def get_pr_info(repo_name, pr_number):
 
         for file in all_files:
 
+
             if any(file.filename.lower().endswith(ext) for ext in EXCLUDED_EXTENSIONS):
                 logger.info(f"Skipping binary file: {file.filename}")
                 continue
@@ -99,6 +101,7 @@ def get_pr_info(repo_name, pr_number):
             if not file.patch:
                 logger.info(f"Skipping file without patch: {file.filename}")
                 continue
+
 
             file_size = len(file.patch.encode('utf-8'))
             if total_size + file_size > MAX_DIFF_SIZE:
@@ -108,6 +111,7 @@ def get_pr_info(repo_name, pr_number):
 
             logger.info(
                 f"Processing file: {file.filename} ({file_size} bytes)")
+
             file_info = {
                 "filename": file.filename,
                 "status": file.status,
@@ -168,6 +172,7 @@ def generate_pr_summary(repo_name, pr_number):
             return ""
         patch = ''.join(char for char in patch if ord(char)
                         >= 32 or char == '\n')
+
         patch = patch.replace('\\', '\\\\').replace(
             '"', '\\"').replace('\n', '\\n')
         return patch
@@ -246,14 +251,17 @@ Changes:
         format="json",
         timeout=120,
         headers=headers,
+
         system="""[SYSTEM: You are a PR message generator that ONLY outputs valid JSON.
 Your task is to UPDATE the PR title and description based on the changes.
 
 Your response must be a single JSON object with EXACTLY these two fields:
+
 {
     "title": "string (max 72 chars, must be a new descriptive title)",
     "description": "string (markdown formatted)"
 }
+
 
 CRITICAL RULES:
 1. You MUST generate a NEW title that is different from the current title
@@ -280,6 +288,7 @@ Example of valid response:
     "title": "Add user authentication system",
     "description": "- Implemented JWT-based authentication\\n- Added login and registration endpoints\\n- Created user model and database migrations"
 }""",
+
         num_predict=1024
     )
 
