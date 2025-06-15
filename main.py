@@ -91,7 +91,6 @@ def get_pr_info(repo_name, pr_number):
         logger.info(f"Found {len(all_files)} total files in PR")
 
         for file in all_files:
-            logger.info(f"Processing file: {file.filename}")
 
             if any(file.filename.lower().endswith(ext) for ext in EXCLUDED_EXTENSIONS):
                 logger.info(f"Skipping binary file: {file.filename}")
@@ -185,10 +184,10 @@ def generate_pr_summary(repo_name, pr_number):
         }
 
     prompt = PromptTemplate(
-        template="""[SYSTEM: You are a PR message generator. You must return ONLY a JSON object with exactly two fields: "title" and "description". Do not include any other text, explanations, or fields.]
+        template="""[SYSTEM: You are a PR message generator. Your task is to UPDATE the PR title and description based on the changes. Return ONLY a JSON object with exactly two fields: "title" and "description".]
 
 PR Context:
-- Title: {title}
+- Current Title: {title}
 - Total Changes: {total_changes}
 
 Changes:
@@ -196,9 +195,9 @@ Changes:
 {diff}
 ```
 
-[SYSTEM: Return ONLY this JSON object, nothing else:]
+[SYSTEM: You must generate a NEW title that is different from the current title. The new title should be more descriptive of the actual changes. Return ONLY this JSON object:]
 {{
-    "title": "string (max 72 chars)",
+    "title": "string (max 72 chars, must be a new descriptive title)",
     "description": "string (markdown formatted)"
 }}
 
@@ -206,7 +205,17 @@ Changes:
 {{
     "title": "Add user authentication system",
     "description": "- Implemented JWT-based authentication\\n- Added login and registration endpoints\\n- Created user model and database migrations"
-}}""",
+}}
+
+[SYSTEM: IMPORTANT RULES:]
+1. You MUST generate a NEW title that is different from the current title
+2. The new title must be more descriptive of the actual changes
+3. Do not include any notes or explanations
+4. Do not include any text before or after the JSON
+5. Return ONLY the JSON object
+6. Do not include any comments about the title
+7. Do not include any suggestions
+8. Do not include any markdown formatting""",
         input_variables=["title", "total_changes", "diff"]
     )
 
@@ -238,28 +247,33 @@ Changes:
         timeout=120,
         headers=headers,
         system="""[SYSTEM: You are a PR message generator that ONLY outputs valid JSON.
+Your task is to UPDATE the PR title and description based on the changes.
+
 Your response must be a single JSON object with EXACTLY these two fields:
 {
-    "title": "string (max 72 chars)",
+    "title": "string (max 72 chars, must be a new descriptive title)",
     "description": "string (markdown formatted)"
 }
 
 CRITICAL RULES:
-1. Return ONLY the JSON object
-2. Do not include any other fields
-3. Do not include any other text
-4. Do not include markdown code blocks
-5. Do not include any explanations
-6. Do not include any nested objects
-7. The response must be parseable JSON
-8. Both fields must be non-empty strings
-9. Do not include any other fields like 'summary', 'output', or 'steps'
-10. Do not include any text before or after the JSON object
-11. Do not include any comments or explanations
-12. Do not include any markdown formatting
+1. You MUST generate a NEW title that is different from the current title
+2. The new title must be more descriptive of the actual changes
+3. Return ONLY the JSON object
+4. Do not include any other fields
+5. Do not include any other text
+6. Do not include any explanations
+7. Do not include any nested objects
+8. The response must be parseable JSON
+9. Both fields must be non-empty strings
+10. Do not include any other fields like 'summary', 'output', or 'steps'
+11. Do not include any text before or after the JSON object
+12. Do not include any comments or explanations
 13. Do not include any system messages
 14. Do not include any user messages
 15. Do not include any other JSON objects
+16. Do not include any notes about the title
+17. Do not include any suggestions
+18. The title must be a new descriptive title, not the original title
 
 Example of valid response:
 {
@@ -332,12 +346,18 @@ def update_pr(repo_name, pr_number, summary):
     g = github.get_github()
 
     try:
-        g.get_repo(repo_name).get_pull(pr_number).edit(
-            title=summary['title'], body=summary['description'])
+        logger.info(
+            f"Updating PR #{pr_number} with generated title and description")
+        logger.info(f"New title: {summary['title']}")
+        logger.info(f"New description: {summary['description']}")
 
-        print(f"PR {pr_number} updated successfully")
+        pr = g.get_repo(repo_name).get_pull(pr_number)
+
+        pr.edit(title=summary['title'], body=summary['description'])
+        logger.info(f"PR {pr_number} updated successfully")
         return True
     except Exception as e:
+        logger.error(f"Error updating PR: {str(e)}")
         print(f"Error: {str(e)}", file=sys.stderr)
         raise e
 
