@@ -2,98 +2,141 @@
   <img src="https://michaelgmunz.com/wp-content/uploads/2016/09/morbo-doom.png">
 </p>
 
-# Morbo
+# Morbo - PR Description Generator
 
-**Morbo** is an AI-powered GitHub PR assistant that automates pull request summaries using a large language model. Designed to integrate directly with your CI/CD pipeline, Morbo detects code changes introduced in a pull request, generates a concise summary of the diff, and posts it directly to the PR — so developers can focus on writing code, not explaining it.
+**Morbo** is an AI-powered GitHub Action that automatically generates descriptive Pull Request (PR) summaries using Ollama-powered LLM. Designed to integrate directly with your CI/CD pipeline, Morbo detects code changes introduced in a PR, generates a concise, informative summary utilizing the diff, and posts it directly to the PR — so developers can focus on writing code, not explaining it.
 
----
+## Features
+
+-   Automatic PR summary generation using Ollama LLM
+-   Triggers on PR open and update events
+-   Easy integration with any repository
+-   Real-time PR updates
 
 ## What It Does
 
 Whenever a pull request is opened or updated, **Morbo**:
 
-1. Pulls the diff from the PR using GitHub's API.
-2. Sends the diff to a deployed **DeepSeek LLM** hosted on Google Cloud Platform.
-3. Receives a short, human-readable summary of the changes.
-4. Automatically posts the summary as a comment in the pull request.
-
----
+1. Pulls the diff from the PR using GitHub's API
+2. Sends the diff to your Ollama server for processing
+3. Receives a short, human-readable summary of the changes
+4. Automatically updates the PR with the generated summary
 
 ## Tech Stack
 
 -   **Python** – Core application logic
--   **Docker** – Containerized for deployment across CI environments
--   **DeepSeek LLM** – Custom AI model hosted on GCP for summarizing code diffs
--   **GitHub API** – For fetching diffs and posting PR comments
--   **CI Integration** – Built to run during your automated pipelines
+-   **GitHub Actions** – For CI/CD integration
+-   **Google Cloud Platform** – Hosting infrastructure
+-   **Docker** – Containerized Ollama deployment
+-   Ollama container for LLM serving
+-   DeepSeek-R1:8B model for text generation
+-   **GitHub API** – For fetching diffs and updating PRs
 
----
+## Research & Inspiration
+
+This project is inspired by the research paper ["Automatic Pull Request Description Generation Using LLMs: A T5 Model Approach"](https://arxiv.org/abs/2408.00921) by Md Nazmus Sakib, Md Athikul Islam, and Md Mashrur Arifin. While their work utilized a fine-tuned T5 model, we've adapted their approach using modern LLM technology through Ollama and DeepSeek-R1, making it more accessible and easier to deploy.
 
 ## How It Works (Architecture)
 
 ```plaintext
-                                   GitHub PR
-                                       |
-                                       v
-                                CI/CD Pipeline triggers
-                                       |
-                                       v
-                                  Morbo CLI runs
-                                       |
-                                ┌─────────────────────┐
-                                │  Fetch PR diff via  │
-                                │    GitHub API       │
-                                └─────────────────────┘
-                                       |
-                                       v
-                                ┌─────────────────────┐
-                                │  Send diff to LLM   │
-                                │ (DeepSeek on GCP)   │
-                                └─────────────────────┘
-                                       |
-                                       v
-                                ┌─────────────────────┐
-                                │ Receive summary text│
-                                └─────────────────────┘
-                                       |
-                                       v
-                                ┌─────────────────────┐
-                                │  Post comment to PR │
-                                └─────────────────────┘
+           GitHub PR
+               |
+               v
+        CI/CD Pipeline triggers
+               |
+               v
+          Morbo Action runs
+               |
+        ┌─────────────────────┐
+        │  Fetch PR diff via  │
+        │    GitHub API       │
+        └─────────────────────┘
+               |
+               v
+        ┌─────────────────────┐
+        │  Send diff to LLM   │
+        │    via Ollama       │
+        └─────────────────────┘
+               |
+               v
+        ┌─────────────────────┐
+        │ Receive summary text│
+        └─────────────────────┘
+               |
+               v
+        ┌─────────────────────┐
+        │  Update PR with     │
+        │    new summary      │
+        └─────────────────────┘
 ```
 
----
+## Usage
 
-## Quick Start
+Add this to your repository's `.github/workflows/pr-summary.yml`:
 
-### 1. Clone the Repository
+```yaml
+name: Generate PR Description
 
-```bash
-git clone https://github.com/Farnsworth-Enterprises/Morbo.git
-cd Morbo
+on:
+    pull_request:
+        types: [opened, synchronize]
+
+jobs:
+    generate-pr-description:
+        runs-on: ubuntu-latest
+        steps:
+            - name: Generate PR Description
+              uses: Farnsworth-Enterprises/Morbo@latest
+              with:
+                  github-token: ${{ secrets.GITHUB_TOKEN }}
+                  ollama-url: ${{ secrets.OLLAMA_URL }}
 ```
 
-### 2. Build the Docker Container
+## Required Secrets
 
-```bash
-docker build -t morbo .
+You need to set up the following secrets in your repository:
+
+1. `OLLAMA_URL`: The URL of your Ollama server (e.g., 'http://localhost:11434')
+2. `GITHUB_TOKEN`: This is automatically provided by GitHub Actions
+
+To set up secrets:
+
+1. Go to your repository settings
+2. Navigate to "Secrets and variables" > "Actions"
+3. Click "New repository secret"
+4. Add the required secrets
+
+## Inputs
+
+| Input          | Required | Description                                                        |
+| -------------- | -------- | ------------------------------------------------------------------ |
+| `github-token` | Yes      | GitHub token for authentication. Use `${{ secrets.GITHUB_TOKEN }}` |
+| `ollama-url`   | Yes      | URL of your Ollama server (e.g., 'http://localhost:11434')         |
+| `model-name`   | No       | Name of the Ollama model to use. Defaults to 'deepseek-r1:8b'      |
+| `temperature`  | No       | Temperature for the AI model (0.0 to 1.0). Defaults to '0.0'       |
+
+## Requirements
+
+-   An Ollama server running with the specified model
+-   GitHub repository with pull request access
+
+## Example Output
+
+The action will generate a summary in this format:
+
+```markdown
+# Title: Add User Authentication System
+
+## Description
+
+-   Implemented JWT-based authentication
+-   Added user registration endpoint
+-   Created login functionality
+-   Added password hashing
+-   Updated API documentation
 ```
-
-### 3. Run Morbo (from CI or locally)
-
-```bash
-docker run \
-  -e GITHUB_TOKEN=your_token \
-  -e PR_URL=https://api.github.com/repos/user/repo/pulls/42 \
-  -e LLM_API_URL=https://your-deepseek-endpoint.com/generate \
-  morbo
-```
-
-Environment variable configuration is still in progress and will soon replace CLI input.
-
 
 ## Authors:
 
 - [Luis Gonzalez](https://github.com/zluigon)
 - [Jordan Biehl](https://github.com/jbiehl88)
-

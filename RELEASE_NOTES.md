@@ -1,6 +1,6 @@
 # Release Notes
 
-## v1.0.1 - Initial Rerelease
+## v1.0.3 - Initial Release
 
 ### Features
 
@@ -10,7 +10,7 @@
 
 ### Technical Details
 
--   Uses Python 3.13
+-   Uses Python 3.11
 -   Integrates with Ollama for LLM processing
 -   Includes comprehensive documentation
 
