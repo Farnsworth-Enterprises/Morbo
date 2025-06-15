@@ -82,6 +82,7 @@ def get_pr_info(repo_name, pr_number):
 
         files_changed = []
         total_size = 0
+
         MAX_DIFF_SIZE = 100000
         EXCLUDED_EXTENSIONS = {'.png', '.jpg', '.jpeg', '.gif', '.ico',
                                '.pdf', '.zip', '.tar', '.gz', '.mp4', '.mov', '.wav', '.mp3'}
@@ -93,6 +94,7 @@ def get_pr_info(repo_name, pr_number):
         for file in all_files:
             logger.info(f"Processing file: {file.filename}")
 
+
             if any(file.filename.lower().endswith(ext) for ext in EXCLUDED_EXTENSIONS):
                 logger.info(f"Skipping binary file: {file.filename}")
                 continue
@@ -100,6 +102,7 @@ def get_pr_info(repo_name, pr_number):
             if not file.patch:
                 logger.info(f"Skipping file without patch: {file.filename}")
                 continue
+
 
             file_size = len(file.patch.encode('utf-8'))
             if total_size + file_size > MAX_DIFF_SIZE:
@@ -109,6 +112,7 @@ def get_pr_info(repo_name, pr_number):
 
             logger.info(
                 f"Processing file: {file.filename} ({file_size} bytes)")
+
             file_info = {
                 "filename": file.filename,
                 "status": file.status,
@@ -169,6 +173,7 @@ def generate_pr_summary(repo_name, pr_number):
             return ""
         patch = ''.join(char for char in patch if ord(char)
                         >= 32 or char == '\n')
+
         patch = patch.replace('\\', '\\\\').replace(
             '"', '\\"').replace('\n', '\\n')
         return patch
@@ -187,6 +192,7 @@ def generate_pr_summary(repo_name, pr_number):
     prompt = PromptTemplate(
         template="""[SYSTEM: You are a PR message generator. You must return ONLY a JSON object with exactly two fields: "title" and "description". Do not include any other text, explanations, or fields.]
 
+
 PR Context:
 - Title: {title}
 - Total Changes: {total_changes}
@@ -195,6 +201,7 @@ Changes:
 ```
 {diff}
 ```
+
 
 [SYSTEM: Return ONLY this JSON object, nothing else:]
 {{
@@ -207,6 +214,7 @@ Changes:
     "title": "Add user authentication system",
     "description": "- Implemented JWT-based authentication\\n- Added login and registration endpoints\\n- Created user model and database migrations"
 }}""",
+
         input_variables=["title", "total_changes", "diff"]
     )
 
@@ -237,12 +245,15 @@ Changes:
         format="json",
         timeout=120,
         headers=headers,
+
         system="""[SYSTEM: You are a PR message generator that ONLY outputs valid JSON.
 Your response must be a single JSON object with EXACTLY these two fields:
+
 {
     "title": "string (max 72 chars)",
     "description": "string (markdown formatted)"
 }
+
 
 CRITICAL RULES:
 1. Return ONLY the JSON object
@@ -266,6 +277,7 @@ Example of valid response:
     "title": "Add user authentication system",
     "description": "- Implemented JWT-based authentication\\n- Added login and registration endpoints\\n- Created user model and database migrations"
 }""",
+
         num_predict=1024
     )
 
