@@ -33,16 +33,13 @@ class GitHubConnection:
             self._github = None
 
 
-# Create a global instance
 github = GitHubConnection()
 
-# Set up logging
 logging.basicConfig(
     level=logging.INFO,
-    format='%(message)s'  # Only show the message, not the logger name
+    format='%(message)s'
 )
 
-# Disable debug logging for external libraries
 logging.getLogger('urllib3').setLevel(logging.WARNING)
 logging.getLogger('httpcore').setLevel(logging.WARNING)
 logging.getLogger('httpx').setLevel(logging.WARNING)
@@ -194,9 +191,6 @@ Your response must be a single JSON object with exactly these fields:
 Do not include any other text, explanations, or fields.
 Do not use markdown headers or formatting in the response.
 The response must be parseable JSON.""",
-        stop=["```", "Human:", "Assistant:",
-              "Here's", "I'll", "Let me", "#", "##"],
-        context_window=4096,
         num_predict=1024
     )
 
@@ -211,7 +205,6 @@ The response must be parseable JSON.""",
         response = model.invoke(input=formatted_prompt)
         logger.info("Successfully generated PR summary")
         try:
-            # Log the raw response for debugging
             logger.debug(f"Raw response: {response}")
 
             summary = json.loads(response)
@@ -219,17 +212,14 @@ The response must be parseable JSON.""",
                 raise ValueError(
                     f"Response is not a dictionary. Raw response: {response}")
 
-            # Handle nested summary structure
             if 'summary' in summary:
                 summary = summary['summary']
 
-            # Log the processed summary for debugging
             logger.debug(f"Processed summary: {summary}")
 
-            if not summary:  # Check for empty dictionary
+            if not summary:
                 raise ValueError("Received empty response from Ollama")
 
-            # Validate required fields
             required_fields = ['title', 'description']
             missing_fields = [
                 field for field in required_fields if field not in summary]
@@ -237,7 +227,6 @@ The response must be parseable JSON.""",
                 raise ValueError(
                     f"Missing required fields: {missing_fields}. Raw response: {response}")
 
-            # Validate field types
             if not isinstance(summary['title'], str) or not isinstance(summary['description'], str):
                 raise ValueError(
                     f"Invalid field types in response. Raw response: {response}")
