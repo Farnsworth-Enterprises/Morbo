@@ -9,6 +9,17 @@ import requests
 from requests.exceptions import RequestException
 import sys
 
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(message)s'
+)
+
+logging.getLogger('urllib3').setLevel(logging.WARNING)
+logging.getLogger('httpcore').setLevel(logging.WARNING)
+logging.getLogger('httpx').setLevel(logging.WARNING)
+
+logger = logging.getLogger(__name__)
+
 
 class GitHubConnection:
     _instance = None
@@ -22,30 +33,23 @@ class GitHubConnection:
     def __init__(self):
         if self._github is None:
             load_dotenv()
+            logger.info("Initializing GitHub connection...")
             auth = Auth.Token(os.getenv("GITHUB_TOKEN"))
             self._github = Github(auth=auth)
+            logger.info("GitHub connection established successfully")
 
     def get_github(self):
         return self._github
 
     def close(self):
         if self._github:
+            logger.info("Closing GitHub connection...")
             self._github.close()
             self._github = None
+            logger.info("GitHub connection closed")
 
 
 github = GitHubConnection()
-
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(message)s'
-)
-
-logging.getLogger('urllib3').setLevel(logging.WARNING)
-logging.getLogger('httpcore').setLevel(logging.WARNING)
-logging.getLogger('httpx').setLevel(logging.WARNING)
-
-logger = logging.getLogger(__name__)
 
 
 def get_pr_info(repo_name, pr_number):
@@ -68,33 +72,43 @@ def get_pr_info(repo_name, pr_number):
     g = github.get_github()
 
     try:
+        logger.info(f"Accessing repository: {repo_name}")
         repo = g.get_repo(repo_name)
+        logger.info(f"Repository accessed successfully")
+
+        logger.info(f"Retrieving PR #{pr_number}")
         pr = repo.get_pull(pr_number)
+        logger.info(f"PR #{pr_number} retrieved successfully")
 
         files_changed = []
         total_size = 0
-        MAX_DIFF_SIZE = 100000  # 100KB limit for total diff size
+        MAX_DIFF_SIZE = 100000
         EXCLUDED_EXTENSIONS = {'.png', '.jpg', '.jpeg', '.gif', '.ico',
                                '.pdf', '.zip', '.tar', '.gz', '.mp4', '.mov', '.wav', '.mp3'}
 
-        for file in pr.get_files():
-            # Skip binary files and large files
+        logger.info("Retrieving changed files...")
+        all_files = list(pr.get_files())
+        logger.info(f"Found {len(all_files)} total files in PR")
+
+        for file in all_files:
+            logger.info(f"Processing file: {file.filename}")
+
             if any(file.filename.lower().endswith(ext) for ext in EXCLUDED_EXTENSIONS):
                 logger.info(f"Skipping binary file: {file.filename}")
                 continue
 
-            # Skip files without a patch (e.g., binary files)
             if not file.patch:
                 logger.info(f"Skipping file without patch: {file.filename}")
                 continue
 
-            # Check if adding this file would exceed the size limit
             file_size = len(file.patch.encode('utf-8'))
             if total_size + file_size > MAX_DIFF_SIZE:
                 logger.warning(
                     f"Diff size limit reached. Skipping remaining files.")
                 break
 
+            logger.info(
+                f"Processing file: {file.filename} ({file_size} bytes)")
             file_info = {
                 "filename": file.filename,
                 "status": file.status,
@@ -112,6 +126,16 @@ def get_pr_info(repo_name, pr_number):
             "files_changed": len(files_changed)
         }
 
+        logger.info(
+            f"Processed {len(files_changed)} files with {total_changes['additions']} additions and {total_changes['deletions']} deletions")
+        if len(files_changed) == 0:
+            logger.warning(
+                "No text-based files were found in the PR. This could be because:")
+            logger.warning("1. All files are binary files")
+            logger.warning("2. All files are too large")
+            logger.warning("3. No files have patches")
+            logger.warning("4. The PR is empty")
+
         pr_info = {
             "title": pr.title,
             "description": pr.body,
@@ -121,6 +145,7 @@ def get_pr_info(repo_name, pr_number):
 
         return pr_info
     except Exception as e:
+        logger.error(f"Error retrieving PR information: {str(e)}")
         print(f"Error: {str(e)}", file=sys.stderr)
         raise e
 
@@ -139,14 +164,11 @@ def generate_pr_summary(repo_name, pr_number):
     """
     pr_info = get_pr_info(repo_name, pr_number)
 
-    # Sanitize and format the diff content
     def sanitize_patch(patch):
         if not patch:
             return ""
-        # Remove any null bytes and control characters
         patch = ''.join(char for char in patch if ord(char)
                         >= 32 or char == '\n')
-        # Escape any special characters that could interfere with JSON
         patch = patch.replace('\\', '\\\\').replace(
             '"', '\\"').replace('\n', '\\n')
         return patch
@@ -156,15 +178,14 @@ def generate_pr_summary(repo_name, pr_number):
         for file in pr_info['files_changed']
     ])
 
-    # If no valid files were found, return a default response
     if not combined_diff.strip():
         return {
             "title": pr_info['title'],
-            "description": "No text-based changes found in this PR. Please review manually."
+            "description": "No files were changed in this PR. Please review manually."
         }
 
     prompt = PromptTemplate(
-        template="""Analyze these PR changes and return a JSON object.
+        template="""[SYSTEM: You are a PR message generator. You must return ONLY a JSON object with exactly two fields: "title" and "description". Do not include any other text, explanations, or fields.]
 
 PR Context:
 - Title: {title}
@@ -175,26 +196,17 @@ Changes:
 {diff}
 ```
 
-Return ONLY a JSON object with these exact fields:
+[SYSTEM: Return ONLY this JSON object, nothing else:]
 {{
-    "title": "PR Title (max 72 characters)",
-    "description": "PR Description in markdown format"
+    "title": "string (max 72 chars)",
+    "description": "string (markdown formatted)"
 }}
 
-Example response:
+[SYSTEM: Example of valid response, return ONLY the JSON object:]
 {{
     "title": "Add user authentication system",
     "description": "- Implemented JWT-based authentication\\n- Added login and registration endpoints\\n- Created user model and database migrations"
-}}
-
-Guidelines:
-1. Title: Be specific about the type of change
-2. Description: Use bullet points for changes
-3. Return ONLY the JSON object
-4. Do not include any other text
-5. Do not nest the response under any other fields
-6. Do not use markdown headers or formatting
-7. The response must be valid JSON""",
+}}""",
         input_variables=["title", "total_changes", "diff"]
     )
 
@@ -225,15 +237,35 @@ Guidelines:
         format="json",
         timeout=120,
         headers=headers,
-        system="""You are a PR message generator that ONLY outputs valid JSON.
-Your response must be a single JSON object with exactly these fields:
+        system="""[SYSTEM: You are a PR message generator that ONLY outputs valid JSON.
+Your response must be a single JSON object with EXACTLY these two fields:
 {
     "title": "string (max 72 chars)",
     "description": "string (markdown formatted)"
 }
-Do not include any other text, explanations, or fields.
-Do not use markdown headers or formatting in the response.
-The response must be parseable JSON.""",
+
+CRITICAL RULES:
+1. Return ONLY the JSON object
+2. Do not include any other fields
+3. Do not include any other text
+4. Do not include markdown code blocks
+5. Do not include any explanations
+6. Do not include any nested objects
+7. The response must be parseable JSON
+8. Both fields must be non-empty strings
+9. Do not include any other fields like 'summary', 'output', or 'steps'
+10. Do not include any text before or after the JSON object
+11. Do not include any comments or explanations
+12. Do not include any markdown formatting
+13. Do not include any system messages
+14. Do not include any user messages
+15. Do not include any other JSON objects
+
+Example of valid response:
+{
+    "title": "Add user authentication system",
+    "description": "- Implemented JWT-based authentication\\n- Added login and registration endpoints\\n- Created user model and database migrations"
+}""",
         num_predict=1024
     )
 
@@ -248,6 +280,12 @@ The response must be parseable JSON.""",
         response = model.invoke(input=formatted_prompt)
         logger.info("Successfully generated PR summary")
         try:
+            response = response.strip()
+            start = response.find('{')
+            end = response.rfind('}') + 1
+            if start != -1 and end != 0:
+                response = response[start:end]
+
             logger.debug(f"Raw response: {response}")
 
             summary = json.loads(response)
@@ -277,6 +315,10 @@ The response must be parseable JSON.""",
             return summary
         except json.JSONDecodeError as e:
             logger.error(f"Error parsing JSON response: {e}")
+            logger.error("Failed to parse this response:")
+            logger.error("---START OF FAILED RESPONSE---")
+            logger.error(response)
+            logger.error("---END OF FAILED RESPONSE---")
             return {
                 "title": pr_info['title'],
                 "description": f"Error parsing AI response. Original PR title preserved.\n\nRaw AI response:\n{response}"
