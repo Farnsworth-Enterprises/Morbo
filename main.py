@@ -7,6 +7,7 @@ import json
 import logging
 import requests
 from requests.exceptions import RequestException
+import sys
 
 
 class GitHubConnection:
@@ -71,7 +72,29 @@ def get_pr_info(repo_name, pr_number):
         pr = repo.get_pull(pr_number)
 
         files_changed = []
+        total_size = 0
+        MAX_DIFF_SIZE = 100000  # 100KB limit for total diff size
+        EXCLUDED_EXTENSIONS = {'.png', '.jpg', '.jpeg', '.gif', '.ico',
+                               '.pdf', '.zip', '.tar', '.gz', '.mp4', '.mov', '.wav', '.mp3'}
+
         for file in pr.get_files():
+            # Skip binary files and large files
+            if any(file.filename.lower().endswith(ext) for ext in EXCLUDED_EXTENSIONS):
+                logger.info(f"Skipping binary file: {file.filename}")
+                continue
+
+            # Skip files without a patch (e.g., binary files)
+            if not file.patch:
+                logger.info(f"Skipping file without patch: {file.filename}")
+                continue
+
+            # Check if adding this file would exceed the size limit
+            file_size = len(file.patch.encode('utf-8'))
+            if total_size + file_size > MAX_DIFF_SIZE:
+                logger.warning(
+                    f"Diff size limit reached. Skipping remaining files.")
+                break
+
             file_info = {
                 "filename": file.filename,
                 "status": file.status,
@@ -81,6 +104,7 @@ def get_pr_info(repo_name, pr_number):
                 "patch": file.patch
             }
             files_changed.append(file_info)
+            total_size += file_size
 
         total_changes = {
             "additions": sum(f["additions"] for f in files_changed),
@@ -115,10 +139,29 @@ def generate_pr_summary(repo_name, pr_number):
     """
     pr_info = get_pr_info(repo_name, pr_number)
 
+    # Sanitize and format the diff content
+    def sanitize_patch(patch):
+        if not patch:
+            return ""
+        # Remove any null bytes and control characters
+        patch = ''.join(char for char in patch if ord(char)
+                        >= 32 or char == '\n')
+        # Escape any special characters that could interfere with JSON
+        patch = patch.replace('\\', '\\\\').replace(
+            '"', '\\"').replace('\n', '\\n')
+        return patch
+
     combined_diff = "\n\n".join([
-        f"File: {file['filename']}\nStatus: {file['status']}\n{file['patch']}"
+        f"File: {file['filename']}\nStatus: {file['status']}\n{sanitize_patch(file['patch'])}"
         for file in pr_info['files_changed']
     ])
+
+    # If no valid files were found, return a default response
+    if not combined_diff.strip():
+        return {
+            "title": pr_info['title'],
+            "description": "No text-based changes found in this PR. Please review manually."
+        }
 
     prompt = PromptTemplate(
         template="""Analyze these PR changes and return a JSON object.
@@ -258,19 +301,27 @@ def update_pr(repo_name, pr_number, summary):
 
 
 if __name__ == "__main__":
-    import sys
-    if len(sys.argv) != 3:
-        print("Usage: python main.py <repo_name> <pr_number>")
-        sys.exit(1)
-
     try:
-        repo_name = sys.argv[1]
-        pr_number = int(sys.argv[2])
+        repo_name = os.environ.get('REPO_NAME')
+        pr_number = int(os.environ.get('PR_NUMBER'))
+
+        if not repo_name or not pr_number:
+            logger.error(
+                "Missing required environment variables: REPO_NAME and PR_NUMBER")
+            sys.exit(1)
+
+        github_token = os.environ.get('GITHUB_TOKEN')
+        ollama_url = os.environ.get('OLLAMA_URL')
+
+        if not github_token or not ollama_url:
+            logger.error(
+                "Missing required environment variables: GITHUB_TOKEN and OLLAMA_URL")
+            sys.exit(1)
+
         summary = generate_pr_summary(repo_name, pr_number)
         update_pr(repo_name, pr_number, summary)
     except Exception as e:
-        print(f"Error: {str(e)}", file=sys.stderr)
+        logger.error(f"Error: {str(e)}")
         sys.exit(1)
-
     finally:
         github.close()
