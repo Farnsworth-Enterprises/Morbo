@@ -62,7 +62,7 @@ def get_pr_info(repo_name, pr_number):
     Returns:
         dict: A dictionary containing structured PR information including:
             - title: PR title
-            - description: PR description
+            - body: PR body
             - created_at: PR creation date
             - base_branch: Target branch
             - head_branch: Source branch
@@ -93,7 +93,6 @@ def get_pr_info(repo_name, pr_number):
 
         for file in all_files:
 
-
             if any(file.filename.lower().endswith(ext) for ext in EXCLUDED_EXTENSIONS):
                 logger.info(f"Skipping binary file: {file.filename}")
                 continue
@@ -101,7 +100,6 @@ def get_pr_info(repo_name, pr_number):
             if not file.patch:
                 logger.info(f"Skipping file without patch: {file.filename}")
                 continue
-
 
             file_size = len(file.patch.encode('utf-8'))
             if total_size + file_size > MAX_DIFF_SIZE:
@@ -141,7 +139,7 @@ def get_pr_info(repo_name, pr_number):
 
         pr_info = {
             "title": pr.title,
-            "description": pr.body,
+            "body": pr.body,
             "files_changed": files_changed,
             "total_changes": total_changes
         }
@@ -163,7 +161,7 @@ def generate_pr_summary(repo_name, pr_number):
     Returns:
         dict: A dictionary containing:
             - title: The PR title (max 72 characters)
-            - description: The PR description in markdown format
+            - body: The PR body in markdown format
     """
     pr_info = get_pr_info(repo_name, pr_number)
 
@@ -185,11 +183,11 @@ def generate_pr_summary(repo_name, pr_number):
     if not combined_diff.strip():
         return {
             "title": pr_info['title'],
-            "description": "No files were changed in this PR. Please review manually."
+            "body": "No files were changed in this PR. Please review manually."
         }
 
     prompt = PromptTemplate(
-        template="""[SYSTEM: You are a PR message generator. Your task is to UPDATE the PR title and description based on the changes. Return ONLY a JSON object with exactly two fields: "title" and "description".]
+        template="""[SYSTEM: You are a Pull Request (PR) Title and body generator. Your task is to UPDATE the PR title and body based on the changes. Return ONLY a JSON object with exactly two fields: "title" and "body".]
 
 PR Context:
 - Current Title: {title}
@@ -203,16 +201,16 @@ Changes:
 [SYSTEM: You must generate a NEW title that is different from the current title. The new title should be more descriptive of the actual changes. Return ONLY this JSON object:]
 {{
     "title": "string (max 72 chars, must be a new descriptive title)",
-    "description": "string (markdown formatted)"
+    "body": "string (markdown formatted)"
 }}
 
 [SYSTEM: Example of valid response, return ONLY the JSON object:]
 {{
     "title": "Add user authentication system",
-    "description": "- Implemented JWT-based authentication\\n- Added login and registration endpoints\\n- Created user model and database migrations"
+    "body": "- Implemented JWT-based authentication\\n- Added login and registration endpoints\\n- Created user model and database migrations"
 }}
 
-[SYSTEM: IMPORTANT RULES:]
+# [SYSTEM: IMPORTANT RULES:]
 1. You MUST generate a NEW title that is different from the current title
 2. The new title must be more descriptive of the actual changes
 3. Do not include any notes or explanations
@@ -220,7 +218,7 @@ Changes:
 5. Return ONLY the JSON object
 6. Do not include any comments about the title
 7. Do not include any suggestions
-8. Do not include any markdown formatting""",
+""",
         input_variables=["title", "total_changes", "diff"]
     )
 
@@ -253,13 +251,13 @@ Changes:
         headers=headers,
 
         system="""[SYSTEM: You are a PR message generator that ONLY outputs valid JSON.
-Your task is to UPDATE the PR title and description based on the changes.
+Your task is to UPDATE the PR title and body based on the changes.
 
 Your response must be a single JSON object with EXACTLY these two fields:
 
 {
     "title": "string (max 72 chars, must be a new descriptive title)",
-    "description": "string (markdown formatted)"
+    "body": "string (markdown formatted)"
 }
 
 
@@ -286,7 +284,7 @@ CRITICAL RULES:
 Example of valid response:
 {
     "title": "Add user authentication system",
-    "description": "- Implemented JWT-based authentication\\n- Added login and registration endpoints\\n- Created user model and database migrations"
+    "body": "- Implemented JWT-based authentication\\n- Added login and registration endpoints\\n- Created user model and database migrations"
 }""",
 
         num_predict=1024
@@ -324,14 +322,14 @@ Example of valid response:
             if not summary:
                 raise ValueError("Received empty response from Ollama")
 
-            required_fields = ['title', 'description']
+            required_fields = ['title', 'body']
             missing_fields = [
                 field for field in required_fields if field not in summary]
             if missing_fields:
                 raise ValueError(
                     f"Missing required fields: {missing_fields}. Raw response: {response}")
 
-            if not isinstance(summary['title'], str) or not isinstance(summary['description'], str):
+            if not isinstance(summary['title'], str) or not isinstance(summary['body'], str):
                 raise ValueError(
                     f"Invalid field types in response. Raw response: {response}")
 
@@ -344,7 +342,7 @@ Example of valid response:
             logger.error("---END OF FAILED RESPONSE---")
             return {
                 "title": pr_info['title'],
-                "description": f"Error parsing AI response. Original PR title preserved.\n\nRaw AI response:\n{response}"
+                "body": f"Error parsing AI response. Original PR title preserved.\n\nRaw AI response:\n{response}"
             }
     except Exception as e:
         logger.error(f"Error during Ollama request: {str(e)}")
@@ -356,13 +354,13 @@ def update_pr(repo_name, pr_number, summary):
 
     try:
         logger.info(
-            f"Updating PR #{pr_number} with generated title and description")
+            f"Updating PR #{pr_number} with generated title and body")
         logger.info(f"New title: {summary['title']}")
-        logger.info(f"New description: {summary['description']}")
+        logger.info(f"New body:\n {summary['body']}")
 
         pr = g.get_repo(repo_name).get_pull(pr_number)
 
-        pr.edit(title=summary['title'], body=summary['description'])
+        pr.edit(title=summary['title'], body=summary['body'])
         logger.info(f"PR {pr_number} updated successfully")
         return True
     except Exception as e:
@@ -374,12 +372,14 @@ def update_pr(repo_name, pr_number, summary):
 if __name__ == "__main__":
     try:
         repo_name = os.environ.get('REPO_NAME')
-        pr_number = int(os.environ.get('PR_NUMBER'))
+        pr_number = os.environ.get('PR_NUMBER')
 
         if not repo_name or not pr_number:
             logger.error(
                 "Missing required environment variables: REPO_NAME and PR_NUMBER")
             sys.exit(1)
+
+        pr_number = int(pr_number)
 
         github_token = os.environ.get('GITHUB_TOKEN')
         ollama_url = os.environ.get('OLLAMA_URL')
