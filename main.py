@@ -8,6 +8,7 @@ import logging
 import requests
 from requests.exceptions import RequestException
 import sys
+import time
 
 logging.basicConfig(
     level=logging.INFO,
@@ -19,6 +20,11 @@ logging.getLogger('httpcore').setLevel(logging.WARNING)
 logging.getLogger('httpx').setLevel(logging.WARNING)
 
 logger = logging.getLogger(__name__)
+
+# Configuration constants
+MAX_DIFF_SIZE = 100000
+EXCLUDED_EXTENSIONS = {'.png', '.jpg', '.jpeg', '.gif', '.ico',
+                       '.pdf', '.zip', '.tar', '.gz', '.mp4', '.mov', '.wav', '.mp3'}
 
 
 class GitHubConnection:
@@ -54,21 +60,23 @@ github = GitHubConnection()
 
 def get_pr_info(repo_name, pr_number):
     """
-    Retrieves structured information about a pull request that can be used to generate a PR summary.
+    Retrieves structured information about a pull request that can be used to generate a pull request summary.
 
     Args:
         pr_number (int): The number of the pull request to analyze
 
     Returns:
-        dict: A dictionary containing structured PR information including:
-            - title: PR title
-            - body: PR body
-            - created_at: PR creation date
+        dict: A dictionary containing structured pull request information including:
+            - title: Pull request title
+            - body: Pull request body
+            - created_at: Pull request creation date
             - base_branch: Target branch
             - head_branch: Source branch
             - files_changed: List of files with their changes
             - total_changes: Summary of total changes
     """
+    start_time = time.time()
+
     g = github.get_github()
 
     try:
@@ -76,39 +84,40 @@ def get_pr_info(repo_name, pr_number):
         repo = g.get_repo(repo_name)
         logger.info(f"Repository accessed successfully")
 
-        logger.info(f"Retrieving PR #{pr_number}")
+        logger.info(f"Retrieving pull request #{pr_number}")
         pr = repo.get_pull(pr_number)
-        logger.info(f"PR #{pr_number} retrieved successfully")
+        logger.info(f"Pull request #{pr_number} retrieved successfully")
 
         files_changed = []
         total_size = 0
-
-        MAX_DIFF_SIZE = 100000
-        EXCLUDED_EXTENSIONS = {'.png', '.jpg', '.jpeg', '.gif', '.ico',
-                               '.pdf', '.zip', '.tar', '.gz', '.mp4', '.mov', '.wav', '.mp3'}
+        binary_files_skipped = 0
+        files_without_patch = 0
+        files_excluded_by_size = 0
 
         logger.info("Retrieving changed files...")
         all_files = list(pr.get_files())
-        logger.info(f"Found {len(all_files)} total files in PR")
+        logger.info(f"Found {len(all_files)} total files in pull request")
 
         for file in all_files:
-
             if any(file.filename.lower().endswith(ext) for ext in EXCLUDED_EXTENSIONS):
                 logger.info(f"Skipping binary file: {file.filename}")
+                binary_files_skipped += 1
                 continue
 
             if not file.patch:
                 logger.info(f"Skipping file without patch: {file.filename}")
+                files_without_patch += 1
                 continue
 
             file_size = len(file.patch.encode('utf-8'))
             if total_size + file_size > MAX_DIFF_SIZE:
                 logger.warning(
                     f"Diff size limit reached. Skipping remaining files.")
+                files_excluded_by_size += 1
                 break
 
             logger.info(
-                f"Processing file: {file.filename} ({file_size} bytes)")
+                f"Processing {file.filename}: {file.status}, +{file.additions}/-{file.deletions} lines ({file_size} bytes)")
 
             file_info = {
                 "filename": file.filename,
@@ -127,15 +136,23 @@ def get_pr_info(repo_name, pr_number):
             "files_changed": len(files_changed)
         }
 
+        elapsed_time = time.time() - start_time
+        logger.info(
+            f"Pull request info retrieval completed in {elapsed_time:.2f} seconds")
         logger.info(
             f"Processed {len(files_changed)} files with {total_changes['additions']} additions and {total_changes['deletions']} deletions")
+        logger.info(f"Total diff size processed: {total_size} bytes")
+        logger.info(f"Binary files skipped: {binary_files_skipped}")
+        logger.info(f"Files without patch: {files_without_patch}")
+        logger.info(f"Files excluded by size limit: {files_excluded_by_size}")
+
         if len(files_changed) == 0:
             logger.warning(
-                "No text-based files were found in the PR. This could be because:")
+                "No text-based files were found in the pull request. This could be because:")
             logger.warning("1. All files are binary files")
             logger.warning("2. All files are too large")
             logger.warning("3. No files have patches")
-            logger.warning("4. The PR is empty")
+            logger.warning("4. The pull request is empty")
 
         pr_info = {
             "title": pr.title,
@@ -146,22 +163,24 @@ def get_pr_info(repo_name, pr_number):
 
         return pr_info
     except Exception as e:
-        logger.error(f"Error retrieving PR information: {str(e)}")
+        elapsed_time = time.time() - start_time
+        logger.error(
+            f"Error retrieving pull request information after {elapsed_time:.2f} seconds: {str(e)}")
         print(f"Error: {str(e)}", file=sys.stderr)
         raise e
 
 
 def generate_pr_summary(repo_name, pr_number):
     """
-    Generates a PR summary using the LLM based on PR information.
+    Generates a pull request summary using the LLM based on pull request information.
 
     Args:
         pr_number (int): The number of the pull request to analyze
 
     Returns:
         dict: A dictionary containing:
-            - title: The PR title (max 72 characters)
-            - body: The PR body in markdown format
+            - title: The pull request title (max 72 characters)
+            - body: The pull request body in markdown format
     """
     pr_info = get_pr_info(repo_name, pr_number)
 
@@ -181,9 +200,10 @@ def generate_pr_summary(repo_name, pr_number):
     ])
 
     if not combined_diff.strip():
+        logger.warning("No diff content available for LLM processing")
         return {
             "title": pr_info['title'],
-            "body": "No files were changed in this PR. Please review manually."
+            "body": "No files were changed in this pull request. Please review manually."
         }
 
     prompt = PromptTemplate(
@@ -244,7 +264,7 @@ Changes:
 
     model = OllamaLLM(
         base_url=ollama_url,
-        model="deepseek-r1:8b",
+        model=model_name,
         temperature=0.0,
         format="json",
         timeout=120,
@@ -296,10 +316,13 @@ Example of valid response:
         diff=combined_diff
     )
 
-    logger.info("Generating PR summary...")
+    logger.info("Generating pull request summary with LLM...")
+    llm_start_time = time.time()
     try:
         response = model.invoke(input=formatted_prompt)
-        logger.info("Successfully generated PR summary")
+        llm_elapsed_time = time.time() - llm_start_time
+        logger.info(f"LLM response received in {llm_elapsed_time:.2f} seconds")
+
         try:
             response = response.strip()
             start = response.find('{')
@@ -327,25 +350,28 @@ Example of valid response:
                 field for field in required_fields if field not in summary]
             if missing_fields:
                 raise ValueError(
-                    f"Missing required fields: {missing_fields}. Raw response: {response}")
+                    f"Missing required fields: {missing_fields}")
 
             if not isinstance(summary['title'], str) or not isinstance(summary['body'], str):
                 raise ValueError(
-                    f"Invalid field types in response. Raw response: {response}")
+                    f"Invalid field types in response")
 
             return summary
         except json.JSONDecodeError as e:
             logger.error(f"Error parsing JSON response: {e}")
-            logger.error("Failed to parse this response:")
             logger.error("---START OF FAILED RESPONSE---")
             logger.error(response)
             logger.error("---END OF FAILED RESPONSE---")
+            logger.warning(
+                f"Using original pull request title due to parsing error: {pr_info['title']}")
             return {
                 "title": pr_info['title'],
-                "body": f"Error parsing AI response. Original PR title preserved.\n\nRaw AI response:\n{response}"
+                "body": f"Error parsing AI response. Original pull request title preserved.\n\nRaw AI response:\n{response}"
             }
     except Exception as e:
-        logger.error(f"Error during Ollama request: {str(e)}")
+        llm_elapsed_time = time.time() - llm_start_time
+        logger.error(
+            f"Error during Ollama request after {llm_elapsed_time:.2f} seconds: {str(e)}")
         raise
 
 
@@ -354,17 +380,17 @@ def update_pr(repo_name, pr_number, summary):
 
     try:
         logger.info(
-            f"Updating PR #{pr_number} with generated title and body")
+            f"Updating pull request #{pr_number} with generated title and body")
         logger.info(f"New title: {summary['title']}")
-        logger.info(f"New body:\n {summary['body']}")
+        logger.info(f"New body:\n{summary['body']}")
 
         pr = g.get_repo(repo_name).get_pull(pr_number)
 
         pr.edit(title=summary['title'], body=summary['body'])
-        logger.info(f"PR {pr_number} updated successfully")
+        logger.info(f"Pull request {pr_number} updated successfully")
         return True
     except Exception as e:
-        logger.error(f"Error updating PR: {str(e)}")
+        logger.error(f"Error updating pull request: {str(e)}")
         print(f"Error: {str(e)}", file=sys.stderr)
         raise e
 
@@ -380,9 +406,12 @@ if __name__ == "__main__":
             sys.exit(1)
 
         pr_number = int(pr_number)
+        logger.info(
+            f"Processing pull request #{pr_number} in repository {repo_name}")
 
         github_token = os.environ.get('GITHUB_TOKEN')
         ollama_url = os.environ.get('OLLAMA_URL')
+        model_name = os.environ.get('MODEL_NAME', 'deepseek-r1:8b')
 
         if not github_token or not ollama_url:
             logger.error(
@@ -391,8 +420,11 @@ if __name__ == "__main__":
 
         summary = generate_pr_summary(repo_name, pr_number)
         update_pr(repo_name, pr_number, summary)
+
     except Exception as e:
         logger.error(f"Error: {str(e)}")
         sys.exit(1)
     finally:
         github.close()
+        logger.info(
+            f"Pull request summary generation and update completed successfully for PR #{pr_number}")
